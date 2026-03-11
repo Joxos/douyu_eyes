@@ -1,3 +1,5 @@
+import asyncio
+import math
 import os
 import random
 import time
@@ -17,6 +19,8 @@ _engine_cache = None
 _engine_dsn = None
 _stats_summary_cache_value = None
 _stats_summary_cache_expires_at = 0.0
+_sync_task = None
+_sync_stop_event = None
 
 
 def _utc_now_iso() -> str:
@@ -75,8 +79,19 @@ def _compute_stats_summary():
     minute_start = datetime.now(timezone.utc).replace(second=0, microsecond=0)
 
     with Session(engine) as session:
-        unique_stmt = select(func.count(func.distinct(Danmaku.content))).where(*base_filters())
-        unique_count_all_time = int(session.exec(unique_stmt).one())
+        conn = session.connection()
+        unique_count_all_time = int(
+            conn.execute(
+                sqlalchemy_module.text(
+                    """
+                    SELECT COUNT(*)
+                    FROM public.danmaku_unique_stats
+                    WHERE room_id = :room_id
+                    """
+                ),
+                {"room_id": db_module.ROOM_ID},
+            ).scalar_one()
+        )
 
         minute_stmt = (
             select(func.count())
@@ -85,15 +100,18 @@ def _compute_stats_summary():
         )
         current_minute_count = int(session.exec(minute_stmt).one())
 
-        cnt_expr = func.count().label("cnt")
-        top20_stmt = (
-            select(Danmaku.content, cnt_expr)
-            .where(*base_filters())
-            .group_by(Danmaku.content)
-            .order_by(cnt_expr.desc())
-            .limit(20)
-        )
-        top20_rows = session.exec(top20_stmt).all()
+        top20_rows = conn.execute(
+            sqlalchemy_module.text(
+                """
+                SELECT content, hit_count
+                FROM public.danmaku_unique_stats
+                WHERE room_id = :room_id
+                ORDER BY hit_count DESC
+                LIMIT 20
+                """
+            ),
+            {"room_id": db_module.ROOM_ID},
+        ).all()
         top20 = [{"content": content, "count": int(cnt)} for content, cnt in top20_rows if content is not None]
 
     return StatsSummary(
@@ -252,11 +270,47 @@ def health_check():
     return payload
 
 
+async def _run_unique_sync_loop():
+    db_module = import_module("backend.db")
+    run_incremental_unique_sync = db_module.run_incremental_unique_sync
+    interval = max(5, int(os.getenv("UNIQUE_SYNC_INTERVAL_SECONDS", "30")))
+
+    while _sync_stop_event is not None and not _sync_stop_event.is_set():
+        try:
+            await asyncio.to_thread(run_incremental_unique_sync)
+        except Exception:
+            pass
+
+        try:
+            await asyncio.wait_for(_sync_stop_event.wait(), timeout=interval)
+        except TimeoutError:
+            continue
+
+
 if FastAPI:
     StatsSummary = import_module("backend.schemas").StatsSummary
     SearchResponse = import_module("backend.schemas").SearchResponse
     RandomResponse = import_module("backend.schemas").RandomResponse
     app = FastAPI(title="douyu_eyes-backend")
+
+    @app.on_event("startup")
+    async def startup_sync_worker():
+        global _sync_task
+        global _sync_stop_event
+        db_module = import_module("backend.db")
+        run_incremental_unique_sync = db_module.run_incremental_unique_sync
+        _sync_stop_event = asyncio.Event()
+        await asyncio.to_thread(run_incremental_unique_sync)
+        _sync_task = asyncio.create_task(_run_unique_sync_loop())
+
+    @app.on_event("shutdown")
+    async def shutdown_sync_worker():
+        global _sync_task
+        if _sync_stop_event is not None:
+            _sync_stop_event.set()
+        if _sync_task is not None:
+            await _sync_task
+            _sync_task = None
 
     @app.get("/api/health")
     def api_health_check():
@@ -281,12 +335,16 @@ if FastAPI:
             raise HTTPException(500, str(exc)) from exc
 
     @app.get("/api/search", response_model=SearchResponse)
-    def api_search(q: str, limit: int | None = None, offset: int = 0):
+    def api_search(
+        q: str,
+        limit: int | None = None,
+        offset: int = 0,
+        sort: str = "count",
+    ):
         db_module = import_module("backend.db")
         sqlmodel_module = import_module("sqlmodel")
+        sqlalchemy_module = import_module("sqlalchemy")
 
-        Danmaku = db_module.Danmaku
-        base_filters = db_module.base_filters
         db_get_engine = db_module.get_engine
         parse_keywords = db_module.parse_keywords
         normalize_limit = db_module.normalize_limit
@@ -297,6 +355,8 @@ if FastAPI:
             raise HTTPException(400, "q must not be empty")
         if offset < 0:
             raise HTTPException(400, "offset must be >= 0")
+        if sort not in {"count", "last_seen"}:
+            raise HTTPException(400, "sort must be one of: count, last_seen")
 
         try:
             keywords = parse_keywords(q)
@@ -308,24 +368,59 @@ if FastAPI:
             raise HTTPException(400, "q must contain at least one keyword")
 
         normalized_limit = normalize_limit(limit)
-        token_filters = [Danmaku.content.ilike(f"%{token}%") for token in keywords]
-
         engine = db_get_engine()
         if engine is None:
             raise HTTPException(500, "DYKIT_DSN is not set")
 
-        stmt = (
-            select(Danmaku.content)
-            .where(*base_filters(), *token_filters)
-            .order_by(Danmaku.timestamp.desc(), Danmaku.id.desc())
-            .offset(offset)
-            .limit(normalized_limit)
-        )
-
         with Session(engine) as session:
-            items = [row for row in session.exec(stmt).all() if row is not None]
+            where_clause = " AND ".join([f"content ILIKE :kw{i}" for i in range(len(keywords))])
+            params = {"room_id": db_module.ROOM_ID, "offset": offset, "limit": normalized_limit}
+            for i, token in enumerate(keywords):
+                params[f"kw{i}"] = f"%{token}%"
 
-        return SearchResponse(items=items, limit=normalized_limit, offset=offset)
+            order_clause = "hit_count DESC, content ASC"
+            if sort == "last_seen":
+                order_clause = "last_seen_at DESC, content ASC"
+
+            rows = session.connection().execute(
+                sqlalchemy_module.text(
+                    f"""
+                    SELECT content
+                    FROM public.danmaku_unique_stats
+                    WHERE room_id = :room_id AND {where_clause}
+                    ORDER BY {order_clause}
+                    OFFSET :offset
+                    LIMIT :limit
+                    """
+                ),
+                params,
+            ).all()
+            items = [row[0] for row in rows if row[0] is not None]
+
+            total = int(
+                session.connection().execute(
+                    sqlalchemy_module.text(
+                        f"""
+                        SELECT COUNT(*)
+                        FROM public.danmaku_unique_stats
+                        WHERE room_id = :room_id AND {where_clause}
+                        """
+                    ),
+                    {k: v for k, v in params.items() if k.startswith("kw") or k == "room_id"},
+                ).scalar_one()
+            )
+
+        total_pages = max(1, math.ceil(total / normalized_limit))
+        current_page = (offset // normalized_limit) + 1
+
+        return SearchResponse(
+            items=items,
+            limit=normalized_limit,
+            offset=offset,
+            total=total,
+            total_pages=total_pages,
+            current_page=current_page,
+        )
 
     @app.get("/api/random", response_model=RandomResponse)
     def api_random():

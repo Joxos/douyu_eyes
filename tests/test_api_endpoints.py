@@ -46,6 +46,36 @@ def test_search_endpoint_basic_success(client):
     assert "items" in data and isinstance(data["items"], list)
     assert "limit" in data and isinstance(data["limit"], int)
     assert "offset" in data and isinstance(data["offset"], int)
+    assert "total" in data and isinstance(data["total"], int)
+    assert "total_pages" in data and isinstance(data["total_pages"], int)
+    assert "current_page" in data and isinstance(data["current_page"], int)
+
+
+def test_search_endpoint_sort_modes(client):
+    _skip_if_no_dykit()
+
+    by_count = client.get("/api/search", params={"q": "比赛", "limit": 10, "offset": 0, "sort": "count"})
+    by_last_seen = client.get("/api/search", params={"q": "比赛", "limit": 10, "offset": 0, "sort": "last_seen"})
+    assert by_count.status_code == 200
+    assert by_last_seen.status_code == 200
+    assert isinstance(by_count.json().get("items", []), list)
+    assert isinstance(by_last_seen.json().get("items", []), list)
+
+
+def test_search_endpoint_invalid_sort_bad_request(client):
+    resp = client.get("/api/search", params={"q": "比赛", "sort": "unknown"})
+    assert resp.status_code == 400
+
+
+def test_search_endpoint_returns_deduplicated_items(client):
+    _skip_if_no_dykit()
+
+    resp = client.get("/api/search", params={"q": "比赛", "limit": 20, "offset": 0})
+    assert resp.status_code == 200
+    data = resp.json()
+    items = data.get("items", [])
+    assert isinstance(items, list)
+    assert len(items) == len(set(items))
 
 
 def test_search_endpoint_empty_query_bad_request(client):

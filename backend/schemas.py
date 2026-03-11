@@ -47,6 +47,9 @@ class SearchResponse(BaseModel):
     items: List[str] = Field(default_factory=list, description="Matching items")
     limit: int = Field(..., description="Requested maximum number of items")
     offset: int = Field(..., description="Requested result offset")
+    total: int = Field(..., description="Total number of matched unique items")
+    total_pages: int = Field(..., description="Total pages based on limit")
+    current_page: int = Field(..., description="Current page number (1-indexed)")
 
 
 class RandomResponse(BaseModel):
