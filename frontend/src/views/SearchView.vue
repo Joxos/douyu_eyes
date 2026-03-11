@@ -18,6 +18,10 @@
       >
         Search
       </button>
+      <select v-model="sortMode" @change="changeSort" class="sort-select" aria-label="sort mode">
+        <option value="count">按出现次数</option>
+        <option value="last_seen">按最后见到时间</option>
+      </select>
     </div>
 
     <div v-if="loading" class="loading-state">Loading results...</div>
@@ -43,10 +47,10 @@
       >
         Previous
       </button>
-      <span class="page-info">Page {{ currentPage }}</span>
+      <span class="page-info">第 {{ currentPageDisplay }} / {{ totalPagesDisplay }} 页（共 {{ totalResults }} 条）</span>
       <button 
         @click="nextPage" 
-        :disabled="results.length < limit || loading"
+        :disabled="!canGoNext || loading"
         class="pagination-btn"
       >
         Next
@@ -66,14 +70,27 @@ const error = ref(null)
 const offset = ref(0)
 const limit = 20
 const hasSearched = ref(false)
+const sortMode = ref('count')
+const totalResults = ref(0)
+const totalPages = ref(1)
+const currentPageFromServer = ref(1)
 
 const currentPage = computed(() => Math.floor(offset.value / limit) + 1)
+const currentPageDisplay = computed(() => {
+  const page = Number(currentPageFromServer.value)
+  return Number.isFinite(page) && page > 0 ? page : currentPage.value
+})
+const totalPagesDisplay = computed(() => Math.max(1, totalPages.value))
+const canGoNext = computed(() => currentPageDisplay.value < totalPagesDisplay.value)
 
 const performSearch = async () => {
   if (!query.value.trim()) return
   
   activeQuery.value = query.value
   offset.value = 0
+  totalResults.value = 0
+  totalPages.value = 1
+  currentPageFromServer.value = 1
   await fetchResults()
 }
 
@@ -88,7 +105,8 @@ const fetchResults = async () => {
     const params = new URLSearchParams({
       q: activeQuery.value,
       limit: limit.toString(),
-      offset: offset.value.toString()
+      offset: offset.value.toString(),
+      sort: sortMode.value,
     })
     
     // In development with Vite proxy, this goes to http://127.0.0.1:8000/api/search
@@ -109,10 +127,16 @@ const fetchResults = async () => {
     }
 
     const data = await response.json()
-    const items = Array.isArray(data.items) ? data.items : []
-    results.value = [...new Set(items)]
+    results.value = Array.isArray(data.items) ? data.items : []
     // update offset if backend provided it
     if (typeof data.offset === 'number') offset.value = data.offset
+    const parsedTotal = Number(data.total)
+    const parsedTotalPages = Number(data.total_pages)
+    const parsedCurrentPage = Number(data.current_page)
+
+    if (Number.isFinite(parsedTotal) && parsedTotal >= 0) totalResults.value = parsedTotal
+    if (Number.isFinite(parsedTotalPages) && parsedTotalPages >= 1) totalPages.value = parsedTotalPages
+    if (Number.isFinite(parsedCurrentPage) && parsedCurrentPage >= 1) currentPageFromServer.value = parsedCurrentPage
     
   } catch (err) {
     error.value = err.message
@@ -130,12 +154,17 @@ const prevPage = async () => {
 }
 
 const nextPage = async () => {
-  // Only allow next page if we have a full page of results
-  // If results < limit, we are at the end
-  if (results.value.length >= limit) {
+  if (canGoNext.value) {
     offset.value += limit
     await fetchResults()
   }
+}
+
+const changeSort = async () => {
+  if (!activeQuery.value.trim()) return
+  offset.value = 0
+  currentPageFromServer.value = 1
+  await fetchResults()
 }
 </script>
 
@@ -175,6 +204,14 @@ const nextPage = async () => {
   cursor: pointer;
 }
 
+.sort-select {
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #1f2937;
+  background: #fff;
+}
+
 .search-button:disabled {
   background-color: #ccc;
   cursor: not-allowed;
@@ -207,6 +244,8 @@ const nextPage = async () => {
 .pagination-btn {
   padding: 5px 10px;
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .page-info {
