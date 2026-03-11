@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "douyu_eyes-backend"
+version = "0.1.0"
+description = "Backend skeleton for douyu_eyes"
+authors = ["Sisyphus Junior <devnull@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.101.0"
+uvicorn = {extras = ["standard"], version = "^0.22.0"}
+sqlmodel = "^0.0.9"
+
+[tool.poetry.dev-dependencies]
+pytest = "^7.4.0"
+ruff = "^0.27.0"
+black = "^24.1.0"
+
+[tool.ruff]
+line-length = 88
+target-version = ["py312"]
+exclude = [".git", "__pycache__"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q"
+testpaths = ["tests"]
