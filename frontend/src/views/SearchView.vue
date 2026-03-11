@@ -1,12 +1,12 @@
 <template>
   <div class="search-page">
-    <h1>Search</h1>
+    <h1>搜索</h1>
     
     <div class="search-controls">
       <input 
         v-model="query" 
         @keyup.enter="performSearch"
-        placeholder="Enter search terms..."
+        placeholder="请输入搜索关键词..."
         class="search-input"
         data-testid="search-input"
       />
@@ -16,27 +16,39 @@
         data-testid="search-submit"
         :disabled="loading"
       >
-        Search
+        搜索
       </button>
-      <select v-model="sortMode" @change="changeSort" class="sort-select" aria-label="sort mode">
+      <select v-model="sortMode" @change="changeSort" class="sort-select" aria-label="排序方式">
         <option value="count">按出现次数</option>
-        <option value="last_seen">按最后见到时间</option>
+        <option value="last_seen">按最后出现时间</option>
       </select>
     </div>
 
-    <div v-if="loading" class="loading-state">Loading results...</div>
+    <div v-if="loading" class="loading-state">正在加载搜索结果...</div>
     
     <div v-if="error" class="error-message">{{ error }}</div>
-
     <div v-if="results.length > 0" class="results-container" data-testid="search-results">
       <div v-for="(item, index) in results" :key="index" class="search-result-item">
-        <!-- Render result strings as plain text -->
-        <div>{{ item }}</div>
+        <div class="search-result-main">
+          <div class="search-result-content">{{ item.content }}</div>
+          <div v-if="sortMode === 'count'" class="search-result-count">出现次数：{{ item.count }}</div>
+          <div v-else class="search-result-last-seen" :data-testid="`last-seen-${index}`">
+            最后出现时间：{{ formatLastSeen(item.last_seen_at) }}
+          </div>
+        </div>
+        <button
+          class="copy-button"
+          type="button"
+          :data-testid="`copy-result-${index}`"
+          @click="copyContent(item.content)"
+        >
+          一键复制
+        </button>
       </div>
     </div>
     
     <div v-else-if="!loading && hasSearched" class="no-results">
-      No results found.
+      未找到相关结果。
     </div>
 
     <div class="pagination-controls" v-if="hasSearched && (results.length > 0 || offset > 0)">
@@ -45,7 +57,7 @@
         :disabled="offset === 0 || loading"
         class="pagination-btn"
       >
-        Previous
+        上一页
       </button>
       <span class="page-info">第 {{ currentPageDisplay }} / {{ totalPagesDisplay }} 页（共 {{ totalResults }} 条）</span>
       <button 
@@ -53,7 +65,7 @@
         :disabled="!canGoNext || loading"
         class="pagination-btn"
       >
-        Next
+        下一页
       </button>
     </div>
   </div>
@@ -61,6 +73,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useToast } from '../composables/useToast'
 
 const query = ref('')
 const activeQuery = ref('')
@@ -74,6 +87,41 @@ const sortMode = ref('count')
 const totalResults = ref(0)
 const totalPages = ref(1)
 const currentPageFromServer = ref(1)
+const { showToast } = useToast()
+
+const showCopySuccess = () => {
+  showToast('复制成功', { type: 'success', duration: 1800 })
+}
+
+const formatLastSeen = (value) => {
+  if (value === null || typeof value === 'undefined') return '未知'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '未知'
+  return date.toLocaleString()
+}
+
+const copyContent = async (content) => {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(content)
+      showCopySuccess()
+      return
+    }
+
+    const textArea = document.createElement('textarea')
+    textArea.value = content
+    textArea.setAttribute('readonly', '')
+    textArea.style.position = 'fixed'
+    textArea.style.left = '-9999px'
+    document.body.appendChild(textArea)
+    textArea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textArea)
+    showCopySuccess()
+  } catch (err) {
+    error.value = '复制失败，请手动复制'
+  }
+}
 
 const currentPage = computed(() => Math.floor(offset.value / limit) + 1)
 const currentPageDisplay = computed(() => {
@@ -114,7 +162,7 @@ const fetchResults = async () => {
     
     if (!response.ok) {
       // Try to extract a helpful error message from the backend JSON { detail }
-      let errMsg = `Search failed: ${response.status} ${response.statusText}`
+      let errMsg = `搜索失败：${response.status} ${response.statusText}`
       try {
         const errData = await response.json()
         if (errData && typeof errData === 'object' && errData.detail) {
@@ -128,6 +176,12 @@ const fetchResults = async () => {
 
     const data = await response.json()
     results.value = Array.isArray(data.items) ? data.items : []
+    if (sortMode.value === 'last_seen') {
+      const missingLastSeen = results.value.some((item) => !item?.last_seen_at)
+      if (missingLastSeen) {
+        throw new Error('后端未返回有效的最后出现时间，请稍后重试')
+      }
+    }
     // update offset if backend provided it
     if (typeof data.offset === 'number') offset.value = data.offset
     const parsedTotal = Number(data.total)
@@ -225,6 +279,44 @@ const changeSort = async () => {
   background-color: #f9f9f9;
   /* Ensure result text is dark and readable */
   color: #1f2937;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.search-result-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.search-result-content {
+  font-weight: 600;
+}
+
+.search-result-count {
+  color: #475569;
+  font-size: 14px;
+}
+
+.search-result-last-seen {
+  color: #475569;
+  font-size: 14px;
+}
+
+.copy-button {
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #0f172a;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.copy-button:hover {
+  background: #f1f5f9;
 }
 
 .search-result-item pre {

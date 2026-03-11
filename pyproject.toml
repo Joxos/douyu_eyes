@@ -1,26 +1,43 @@
-[tool.poetry]
-name = "douyu_eyes-backend"
+[project]
+name = "douyu-eyes-backend"
 version = "0.1.0"
 description = "Backend skeleton for douyu_eyes"
-authors = ["Sisyphus Junior <devnull@example.com>"]
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.101.0",
+  "uvicorn[standard]>=0.22.0",
+  "sqlmodel>=0.0.9",
+  "psycopg2-binary>=2.9.9",
+]
 
-[tool.poetry.dependencies]
-python = "^3.12"
-fastapi = "^0.101.0"
-uvicorn = {extras = ["standard"], version = "^0.22.0"}
-sqlmodel = "^0.0.9"
-
-[tool.poetry.dev-dependencies]
-pytest = "^7.4.0"
-ruff = "^0.27.0"
-black = "^24.1.0"
+[dependency-groups]
+dev = [
+  "pytest>=7.4.0",
+  "ruff>=0.15.0",
+  "black>=24.1.0",
+  "basedpyright>=1.31.0",
+  "httpx>=0.27.0",
+]
 
 [tool.ruff]
 line-length = 88
-target-version = ["py312"]
+target-version = "py312"
 exclude = [".git", "__pycache__"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"
 addopts = "-ra -q"
 testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.basedpyright]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+reportAny = "none"
+reportUnknownParameterType = "none"
+reportUnknownVariableType = "none"
+reportUnknownMemberType = "none"
+reportUnknownArgumentType = "none"
+reportMissingParameterType = "none"
+reportMissingTypeArgument = "none"
+reportUnnecessaryComparison = "none"

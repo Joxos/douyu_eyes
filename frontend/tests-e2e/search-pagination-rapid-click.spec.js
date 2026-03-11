@@ -6,8 +6,8 @@ test('rapid clicks on pagination do not break page indicator or select button te
   await page.getByTestId('search-input').fill('比赛')
   await page.getByTestId('search-submit').click()
 
-  const nextBtn = page.getByRole('button', { name: 'Next' })
-  const prevBtn = page.getByRole('button', { name: 'Previous' })
+  const nextBtn = page.getByRole('button', { name: '下一页' })
+  const prevBtn = page.getByRole('button', { name: '上一页' })
   const pageInfo = page.locator('.page-info')
 
   await expect(pageInfo).toContainText('第')

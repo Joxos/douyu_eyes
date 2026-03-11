@@ -1,16 +1,18 @@
 <script setup>
+import ToastHost from './components/ToastHost.vue'
 </script>
 
 <template>
   <div id="app">
     <nav>
-      <router-link to="/stats">Stats</router-link>
-      <router-link to="/search">Search</router-link>
-      <router-link to="/random">Random</router-link>
+      <router-link to="/stats">统计</router-link>
+      <router-link to="/search">搜索</router-link>
+      <router-link to="/random">随机</router-link>
     </nav>
     <main>
       <router-view />
     </main>
+    <ToastHost />
   </div>
 </template>
 

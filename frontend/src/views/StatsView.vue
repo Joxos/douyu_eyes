@@ -1,29 +1,29 @@
 <template>
   <div class="stats-page">
-    <h1>Stats</h1>
+    <h1>统计</h1>
 
-    <div v-if="isLoading" class="loading">Loading...</div>
+    <div v-if="isLoading" class="loading">加载中...</div>
     <div v-else-if="error" class="error">{{ error }}</div>
     
     <div v-else class="content">
       <div class="cards">
         <div class="card" data-testid="unique-count">
-          <h2>All-Time Unique</h2>
+          <h2>历史唯一弹幕数</h2>
           <p>{{ uniqueCount }}</p>
         </div>
         <div class="card" data-testid="current-minute-count">
-          <h2>Current Minute</h2>
+          <h2>当前分钟弹幕数</h2>
           <p>{{ currentMinuteCount }}</p>
         </div>
       </div>
 
       <div class="table-container">
-        <h2>Top 20 Content</h2>
+        <h2>Top 20 弹幕内容</h2>
         <table data-testid="top20-table">
           <thead>
             <tr>
-              <th>Content</th>
-              <th>Count</th>
+              <th>内容</th>
+              <th>次数</th>
             </tr>
           </thead>
           <tbody>
@@ -54,7 +54,7 @@ let pollingInterval = null
 const fetchSummary = async () => {
   try {
     const res = await fetch('/api/stats/summary')
-    if (!res.ok) throw new Error('Failed to fetch summary')
+    if (!res.ok) throw new Error('获取统计摘要失败')
     const data = await res.json()
     uniqueCount.value = data.unique_count_all_time
     currentMinuteCount.value = data.current_minute_count
@@ -70,11 +70,11 @@ const fetchSummary = async () => {
 const fetchCurrentMinute = async () => {
   try {
     const res = await fetch('/api/stats/current-minute')
-    if (!res.ok) throw new Error('Failed to fetch current minute')
+    if (!res.ok) throw new Error('获取当前分钟统计失败')
     const data = await res.json()
     currentMinuteCount.value = data.count
   } catch (err) {
-    console.error('Polling error:', err)
+    console.error('轮询错误:', err)
   }
 }
 

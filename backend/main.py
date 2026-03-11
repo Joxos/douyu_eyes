@@ -3,6 +3,7 @@ import math
 import os
 import random
 import time
+from contextlib import asynccontextmanager
 from importlib import import_module
 from datetime import datetime, timezone
 
@@ -112,7 +113,11 @@ def _compute_stats_summary():
             ),
             {"room_id": db_module.ROOM_ID},
         ).all()
-        top20 = [{"content": content, "count": int(cnt)} for content, cnt in top20_rows if content is not None]
+        top20 = [
+            {"content": content, "count": int(cnt)}
+            for content, cnt in top20_rows
+            if content is not None
+        ]
 
     return StatsSummary(
         unique_count_all_time=unique_count_all_time,
@@ -172,13 +177,18 @@ def get_current_minute_stats():
     )
 
     with Session(engine) as session:
-        row = session.connection().execute(
-            stmt,
-            {
-                "room_id": ROOM_ID,
-                "msg_type": MSG_TYPE,
-            },
-        ).mappings().one()
+        row = (
+            session.connection()
+            .execute(
+                stmt,
+                {
+                    "room_id": ROOM_ID,
+                    "msg_type": MSG_TYPE,
+                },
+            )
+            .mappings()
+            .one()
+        )
 
     return {
         "minute_start": row["minute_start"],
@@ -204,7 +214,9 @@ def get_random_content() -> str:
         raise RuntimeError("DYKIT_DSN is not set")
 
     with Session(engine) as session:
-        min_max_stmt = select(func.min(Danmaku.id), func.max(Danmaku.id)).where(*base_filters())
+        min_max_stmt = select(func.min(Danmaku.id), func.max(Danmaku.id)).where(
+            *base_filters()
+        )
         min_id, max_id = session.exec(min_max_stmt).one()
         if min_id is None or max_id is None:
             raise LookupError("no content found")
@@ -282,7 +294,7 @@ async def _run_unique_sync_loop():
             pass
 
         try:
-            await asyncio.wait_for(_sync_stop_event.wait(), timeout=interval)
+            _ = await asyncio.wait_for(_sync_stop_event.wait(), timeout=interval)
         except TimeoutError:
             continue
 
@@ -291,10 +303,9 @@ if FastAPI:
     StatsSummary = import_module("backend.schemas").StatsSummary
     SearchResponse = import_module("backend.schemas").SearchResponse
     RandomResponse = import_module("backend.schemas").RandomResponse
-    app = FastAPI(title="douyu_eyes-backend")
 
-    @app.on_event("startup")
-    async def startup_sync_worker():
+    @asynccontextmanager
+    async def _lifespan(_app_instance):
         global _sync_task
         global _sync_stop_event
         db_module = import_module("backend.db")
@@ -302,15 +313,16 @@ if FastAPI:
         _sync_stop_event = asyncio.Event()
         await asyncio.to_thread(run_incremental_unique_sync)
         _sync_task = asyncio.create_task(_run_unique_sync_loop())
+        try:
+            yield
+        finally:
+            if _sync_stop_event is not None:
+                _sync_stop_event.set()
+            if _sync_task is not None:
+                await _sync_task
+                _sync_task = None
 
-    @app.on_event("shutdown")
-    async def shutdown_sync_worker():
-        global _sync_task
-        if _sync_stop_event is not None:
-            _sync_stop_event.set()
-        if _sync_task is not None:
-            await _sync_task
-            _sync_task = None
+    app = FastAPI(title="douyu_eyes-backend", lifespan=_lifespan)
 
     @app.get("/api/health")
     def api_health_check():
@@ -349,7 +361,6 @@ if FastAPI:
         parse_keywords = db_module.parse_keywords
         normalize_limit = db_module.normalize_limit
         Session = sqlmodel_module.Session
-        select = sqlmodel_module.select
 
         if not q or not q.strip():
             raise HTTPException(400, "q must not be empty")
@@ -373,32 +384,52 @@ if FastAPI:
             raise HTTPException(500, "DYKIT_DSN is not set")
 
         with Session(engine) as session:
-            where_clause = " AND ".join([f"content ILIKE :kw{i}" for i in range(len(keywords))])
-            params = {"room_id": db_module.ROOM_ID, "offset": offset, "limit": normalized_limit}
+            where_clause = " AND ".join(
+                [f"content ILIKE :kw{i}" for i in range(len(keywords))]
+            )
+            params = {
+                "room_id": db_module.ROOM_ID,
+                "offset": offset,
+                "limit": normalized_limit,
+            }
             for i, token in enumerate(keywords):
                 params[f"kw{i}"] = f"%{token}%"
 
             order_clause = "hit_count DESC, content ASC"
             if sort == "last_seen":
-                order_clause = "last_seen_at DESC, content ASC"
+                order_clause = "COALESCE(last_seen_at, first_seen_at) DESC, content ASC"
 
-            rows = session.connection().execute(
-                sqlalchemy_module.text(
-                    f"""
-                    SELECT content
+            rows = (
+                session.connection()
+                .execute(
+                    sqlalchemy_module.text(
+                        f"""
+                    SELECT content, hit_count,
+                           COALESCE(last_seen_at, first_seen_at) AS last_seen_at
                     FROM public.danmaku_unique_stats
                     WHERE room_id = :room_id AND {where_clause}
                     ORDER BY {order_clause}
                     OFFSET :offset
                     LIMIT :limit
                     """
-                ),
-                params,
-            ).all()
-            items = [row[0] for row in rows if row[0] is not None]
+                    ),
+                    params,
+                )
+                .all()
+            )
+            items = [
+                {
+                    "content": row[0],
+                    "count": int(row[1]),
+                    "last_seen_at": row[2],
+                }
+                for row in rows
+                if row[0] is not None
+            ]
 
             total = int(
-                session.connection().execute(
+                session.connection()
+                .execute(
                     sqlalchemy_module.text(
                         f"""
                         SELECT COUNT(*)
@@ -406,8 +437,13 @@ if FastAPI:
                         WHERE room_id = :room_id AND {where_clause}
                         """
                     ),
-                    {k: v for k, v in params.items() if k.startswith("kw") or k == "room_id"},
-                ).scalar_one()
+                    {
+                        k: v
+                        for k, v in params.items()
+                        if k.startswith("kw") or k == "room_id"
+                    },
+                )
+                .scalar_one()
             )
 
         total_pages = max(1, math.ceil(total / normalized_limit))

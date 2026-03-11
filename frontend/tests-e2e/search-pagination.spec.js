@@ -13,8 +13,8 @@ test('search pagination metadata and button state are usable', async ({ page }) 
   const pageText = await pageInfo.innerText()
   expect(pageText).not.toBe('第 1 / 1 页（共 0 条）')
 
-  const nextBtn = page.getByRole('button', { name: 'Next' })
-  const prevBtn = page.getByRole('button', { name: 'Previous' })
+  const nextBtn = page.getByRole('button', { name: '下一页' })
+  const prevBtn = page.getByRole('button', { name: '上一页' })
 
   if (await nextBtn.isEnabled()) {
     await nextBtn.click()

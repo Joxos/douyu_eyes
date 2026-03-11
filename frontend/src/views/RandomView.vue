@@ -1,6 +1,6 @@
 <template>
   <div class="random-page">
-    <h1>Random Danmu</h1>
+    <h1>随机弹幕</h1>
     
     <div class="controls">
       <button 
@@ -9,7 +9,7 @@
         :disabled="loading"
         class="random-btn"
       >
-        {{ loading ? 'Loading...' : '随机一条弹幕' }}
+        {{ loading ? '加载中...' : '随机一条弹幕' }}
       </button>
     </div>
 
@@ -39,12 +39,12 @@ const fetchRandom = async () => {
   try {
     const response = await fetch('/api/random')
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      throw new Error(`请求失败，状态码：${response.status}`)
     }
     const data = await response.json()
     content.value = data
   } catch (e) {
-    error.value = 'Failed to fetch random danmu: ' + e.message
+    error.value = '获取随机弹幕失败：' + e.message
   } finally {
     loading.value = false
   }

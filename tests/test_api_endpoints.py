@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import pytest
 
 from fastapi.testclient import TestClient
@@ -44,6 +45,11 @@ def test_search_endpoint_basic_success(client):
     # shape assertions
     assert isinstance(data, dict)
     assert "items" in data and isinstance(data["items"], list)
+    if data["items"]:
+        first_item = data["items"][0]
+        assert isinstance(first_item, dict)
+        assert "content" in first_item and isinstance(first_item["content"], str)
+        assert "count" in first_item and isinstance(first_item["count"], int)
     assert "limit" in data and isinstance(data["limit"], int)
     assert "offset" in data and isinstance(data["offset"], int)
     assert "total" in data and isinstance(data["total"], int)
@@ -54,12 +60,28 @@ def test_search_endpoint_basic_success(client):
 def test_search_endpoint_sort_modes(client):
     _skip_if_no_dykit()
 
-    by_count = client.get("/api/search", params={"q": "比赛", "limit": 10, "offset": 0, "sort": "count"})
-    by_last_seen = client.get("/api/search", params={"q": "比赛", "limit": 10, "offset": 0, "sort": "last_seen"})
+    by_count = client.get(
+        "/api/search", params={"q": "比赛", "limit": 10, "offset": 0, "sort": "count"}
+    )
+    by_last_seen = client.get(
+        "/api/search",
+        params={"q": "比赛", "limit": 10, "offset": 0, "sort": "last_seen"},
+    )
     assert by_count.status_code == 200
     assert by_last_seen.status_code == 200
-    assert isinstance(by_count.json().get("items", []), list)
-    assert isinstance(by_last_seen.json().get("items", []), list)
+    by_count_items = by_count.json().get("items", [])
+    by_last_seen_items = by_last_seen.json().get("items", [])
+    assert isinstance(by_count_items, list)
+    assert isinstance(by_last_seen_items, list)
+    if by_count_items:
+        assert "count" in by_count_items[0]
+    if by_last_seen_items:
+        assert "last_seen_at" in by_last_seen_items[0]
+        last_seen_at = by_last_seen_items[0]["last_seen_at"]
+        assert last_seen_at is not None
+        assert isinstance(last_seen_at, str)
+        parsed = datetime.fromisoformat(last_seen_at.replace("Z", "+00:00"))
+        assert isinstance(parsed, datetime)
 
 
 def test_search_endpoint_invalid_sort_bad_request(client):
@@ -75,7 +97,12 @@ def test_search_endpoint_returns_deduplicated_items(client):
     data = resp.json()
     items = data.get("items", [])
     assert isinstance(items, list)
-    assert len(items) == len(set(items))
+    contents = [
+        item["content"]
+        for item in items
+        if isinstance(item, dict) and "content" in item
+    ]
+    assert len(contents) == len(set(contents))
 
 
 def test_search_endpoint_empty_query_bad_request(client):

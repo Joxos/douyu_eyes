@@ -12,7 +12,8 @@ Models included:
 
 These models are plain data containers (no validation/business logic).
 """
-from typing import List
+
+from datetime import datetime
 
 from pydantic import BaseModel, Field
 
@@ -20,6 +21,7 @@ from pydantic import BaseModel, Field
 class Top20Item(BaseModel):
     content: str
     count: int
+    last_seen_at: datetime | None = None
 
 
 class StatsSummary(BaseModel):
@@ -31,9 +33,15 @@ class StatsSummary(BaseModel):
     - top20: ordered list of the top 20 items with counts
     """
 
-    unique_count_all_time: int = Field(..., description="Total unique items seen all time")
-    current_minute_count: int = Field(..., description="Count of items observed in the current minute")
-    top20: List[Top20Item] = Field(default_factory=list, description="Top 20 items (ordered by count)")
+    unique_count_all_time: int = Field(
+        ..., description="Total unique items seen all time"
+    )
+    current_minute_count: int = Field(
+        ..., description="Count of items observed in the current minute"
+    )
+    top20: list[Top20Item] = Field(
+        default_factory=list, description="Top 20 items (ordered by count)"
+    )
 
 
 class SearchResponse(BaseModel):
@@ -44,7 +52,10 @@ class SearchResponse(BaseModel):
     - offset: the requested offset for pagination
     """
 
-    items: List[str] = Field(default_factory=list, description="Matching items")
+    items: list[Top20Item] = Field(
+        default_factory=list,
+        description="Matching items with occurrence count",
+    )
     limit: int = Field(..., description="Requested maximum number of items")
     offset: int = Field(..., description="Requested result offset")
     total: int = Field(..., description="Total number of matched unique items")
@@ -64,4 +75,10 @@ class ErrorResponse(BaseModel):
     detail: str = Field(..., description="Human-readable error message")
 
 
-__all__ = ["StatsSummary", "SearchResponse", "RandomResponse", "ErrorResponse", "Top20Item"]
+__all__ = [
+    "StatsSummary",
+    "SearchResponse",
+    "RandomResponse",
+    "ErrorResponse",
+    "Top20Item",
+]
