@@ -20,6 +20,18 @@
     <div v-if="content" class="result-container" data-testid="random-content">
       <div class="danmu-card">
         <p class="danmu-content">{{ content.content }}</p>
+        <div class="random-meta" data-testid="random-meta-count">被刷次数：{{ content.count }}</div>
+        <div class="random-meta" data-testid="random-meta-last-seen">
+          最后出现时间：{{ formatLastSeen(content.last_seen_at) }}
+        </div>
+        <button
+          class="copy-button"
+          type="button"
+          data-testid="copy-random"
+          @click="copyRandomContent"
+        >
+          一键复制
+        </button>
       </div>
     </div>
   </div>
@@ -27,10 +39,47 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
+import { useToast } from '../composables/useToast'
 
 const content = ref(null)
 const loading = ref(false)
 const error = ref(null)
+const { showToast } = useToast()
+
+const formatLastSeen = (value) => {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    throw new Error('最后出现时间格式无效')
+  }
+  return date.toLocaleString()
+}
+
+const copyRandomContent = async () => {
+  if (!content.value?.content) {
+    throw new Error('随机弹幕内容为空，无法复制')
+  }
+
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(content.value.content)
+      showToast('复制成功', { type: 'success', duration: 1800 })
+      return
+    }
+
+    const textArea = document.createElement('textarea')
+    textArea.value = content.value.content
+    textArea.setAttribute('readonly', '')
+    textArea.style.position = 'fixed'
+    textArea.style.left = '-9999px'
+    document.body.appendChild(textArea)
+    textArea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textArea)
+    showToast('复制成功', { type: 'success', duration: 1800 })
+  } catch (_e) {
+    error.value = '复制失败，请手动复制'
+  }
+}
 
 const fetchRandom = async () => {
   loading.value = true
@@ -42,6 +91,15 @@ const fetchRandom = async () => {
       throw new Error(`请求失败，状态码：${response.status}`)
     }
     const data = await response.json()
+    if (typeof data.content !== 'string' || !data.content.trim()) {
+      throw new Error('随机弹幕内容无效')
+    }
+    if (!Number.isInteger(data.count) || data.count < 1) {
+      throw new Error('随机弹幕次数无效')
+    }
+    if (!data.last_seen_at) {
+      throw new Error('随机弹幕最后出现时间缺失')
+    }
     content.value = data
   } catch (e) {
     error.value = '获取随机弹幕失败：' + e.message
@@ -64,7 +122,7 @@ onMounted(() => {
 
 h1 {
   margin-bottom: 20px;
-  color: #333;
+  color: var(--color-heading);
 }
 
 .controls {
@@ -73,7 +131,7 @@ h1 {
 
 .random-btn {
   padding: 10px 20px;
-  background-color: #ff5f00; /* Douyu orange-ish */
+  background-color: var(--color-accent);
   color: white;
   border: none;
   border-radius: 4px;
@@ -83,20 +141,20 @@ h1 {
 }
 
 .random-btn:hover:not(:disabled) {
-  background-color: #e04e00;
+  background-color: var(--color-accent-strong);
 }
 
 .random-btn:disabled {
-  background-color: #ccc;
+  background-color: var(--color-primary-disabled);
   cursor: not-allowed;
 }
 
 .error-message {
-  color: #721c24;
+  color: var(--color-error);
   margin-bottom: 10px;
   padding: 15px;
-  background-color: #f8d7da;
-  border: 1px solid #f5c6cb;
+  background-color: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
   border-radius: 4px;
 }
 
@@ -106,19 +164,39 @@ h1 {
 }
 
 .danmu-card {
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-divider);
   padding: 20px;
   border-radius: 8px;
-  background-color: white;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-card);
 }
 
 .danmu-content {
   font-size: 20px;
   font-weight: 500;
   margin-bottom: 15px;
-  color: #333;
+  color: var(--color-heading);
   line-height: 1.5;
+}
+
+.random-meta {
+  color: var(--color-muted);
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.copy-button {
+  padding: 6px 10px;
+  border: 1px solid var(--color-border-muted);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-heading-strong);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.copy-button:hover {
+  background: var(--color-surface-hover);
 }
 
 

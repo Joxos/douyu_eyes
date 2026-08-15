@@ -228,8 +228,7 @@ const changeSort = async () => {
   margin: 0 auto;
   padding: 20px;
   font-family: sans-serif;
-  /* Ensure page text is high-contrast on white backgrounds */
-  color: #1f2937; /* dark slate */
+  color: var(--color-heading);
 }
 
 .search-controls {
@@ -242,16 +241,15 @@ const changeSort = async () => {
   flex: 1;
   padding: 8px;
   font-size: 16px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--color-border-muted);
   border-radius: 4px;
-  /* Inputs should be readable on white backgrounds */
-  color: #1f2937;
-  background-color: #ffffff;
+  color: var(--color-heading);
+  background-color: var(--color-surface);
 }
 
 .search-button {
   padding: 8px 16px;
-  background-color: #007bff;
+  background-color: var(--color-primary);
   color: white;
   border: none;
   border-radius: 4px;
@@ -260,25 +258,24 @@ const changeSort = async () => {
 
 .sort-select {
   padding: 8px 10px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--color-border-muted);
   border-radius: 6px;
-  color: #1f2937;
-  background: #fff;
+  color: var(--color-heading);
+  background: var(--color-surface);
 }
 
 .search-button:disabled {
-  background-color: #ccc;
+  background-color: var(--color-primary-disabled);
   cursor: not-allowed;
 }
 
 .search-result-item {
-  border: 1px solid #eee;
+  border: 1px solid var(--color-divider);
   padding: 10px;
   margin-bottom: 10px;
   border-radius: 4px;
-  background-color: #f9f9f9;
-  /* Ensure result text is dark and readable */
-  color: #1f2937;
+  background-color: var(--color-surface-soft);
+  color: var(--color-heading);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -296,27 +293,27 @@ const changeSort = async () => {
 }
 
 .search-result-count {
-  color: #475569;
+  color: var(--color-muted);
   font-size: 14px;
 }
 
 .search-result-last-seen {
-  color: #475569;
+  color: var(--color-muted);
   font-size: 14px;
 }
 
 .copy-button {
   padding: 6px 10px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--color-border-muted);
   border-radius: 6px;
-  background: #fff;
-  color: #0f172a;
+  background: var(--color-surface);
+  color: var(--color-heading-strong);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .copy-button:hover {
-  background: #f1f5f9;
+  background: var(--color-surface-hover);
 }
 
 .search-result-item pre {
@@ -341,7 +338,7 @@ const changeSort = async () => {
 }
 
 .page-info {
-  color: #1f2937; /* dark page info / pagination label color */
+  color: var(--color-heading);
 }
 
 .pagination-btn:disabled {
@@ -350,23 +347,24 @@ const changeSort = async () => {
 }
 
 .error-message {
-  color: red;
+  color: var(--color-error);
   margin-bottom: 10px;
   padding: 10px;
-  background-color: #ffeaea;
+  background-color: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
   border-radius: 4px;
 }
 
 .loading-state {
   text-align: center;
   margin: 20px 0;
-  color: #666;
+  color: var(--color-muted);
 }
 
 .no-results {
   text-align: center;
   margin: 20px 0;
-  color: #666;
+  color: var(--color-muted);
   font-style: italic;
 }
 </style>

@@ -136,6 +136,14 @@ def test_stats_summary_and_current_minute(client):
         assert "content" in item
         assert "count" in item and isinstance(item["count"], int)
 
+    # latest danmu fields (may be null when no recent danmu)
+    assert "latest_danmu_content" in data
+    assert "latest_danmu_ts" in data
+    if data["latest_danmu_ts"] is not None:
+        assert isinstance(data["latest_danmu_ts"], str)
+        parsed = datetime.fromisoformat(data["latest_danmu_ts"].replace("Z", "+00:00"))
+        assert isinstance(parsed, datetime)
+
     # current minute endpoint
     resp2 = client.get("/api/stats/current-minute")
     assert resp2.status_code == 200
@@ -156,3 +164,8 @@ def test_random_endpoint_returns_content(client):
     assert isinstance(data, dict)
     assert "content" in data
     assert isinstance(data["content"], str) and data["content"].strip() != ""
+    assert "count" in data and isinstance(data["count"], int)
+    assert data["count"] >= 1
+    assert "last_seen_at" in data and isinstance(data["last_seen_at"], str)
+    parsed = datetime.fromisoformat(data["last_seen_at"].replace("Z", "+00:00"))
+    assert isinstance(parsed, datetime)

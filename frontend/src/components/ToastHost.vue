@@ -45,12 +45,12 @@ const { toasts } = useToast()
   padding: 10px 14px;
   border-radius: 8px;
   color: #ffffff;
-  background: #1f2937;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.25);
+  background: var(--color-toast);
+  box-shadow: var(--shadow-toast);
 }
 
 .toast-success {
-  background: #0f766e;
+  background: var(--color-toast-success);
 }
 
 .toast-fade-enter-active,

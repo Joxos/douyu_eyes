@@ -119,10 +119,15 @@ def _compute_stats_summary():
             if content is not None
         ]
 
+        # Reuse helper to fetch latest danmu deterministically
+        latest_content, latest_ts = _get_latest_danmu(session, Danmaku, base_filters)
+
     return StatsSummary(
         unique_count_all_time=unique_count_all_time,
         current_minute_count=current_minute_count,
         top20=top20,
+        latest_danmu_content=latest_content,
+        latest_danmu_ts=latest_ts,
     )
 
 
@@ -138,6 +143,27 @@ def get_stats_summary_cached():
     _stats_summary_cache_value = summary
     _stats_summary_cache_expires_at = now + _stats_summary_cache_ttl_seconds()
     return summary
+
+
+def _get_latest_danmu(session, Danmaku, base_filters_func):
+    """Return tuple (content_or_none, timestamp_or_none) for the latest danmu.
+
+    Deterministic ordering: timestamp DESC, id DESC to break ties. Expects a
+    live Session object and the Danmaku model and base_filters() function.
+    """
+    select = import_module("sqlmodel").select
+
+    stmt = (
+        select(Danmaku.content, Danmaku.timestamp, Danmaku.id)
+        .where(*base_filters_func())
+        .order_by(Danmaku.timestamp.desc(), Danmaku.id.desc())
+        .limit(1)
+    )
+    row = session.exec(stmt).first()
+    if row is None:
+        return None, None
+    # row is (content, timestamp, id)
+    return row[0], row[1]
 
 
 def get_current_minute_stats():
@@ -159,7 +185,7 @@ def get_current_minute_stats():
         """
         WITH minute_window AS (
             SELECT
-                date_trunc('minute', now() AT TIME ZONE 'Asia/Shanghai') AS minute_start
+                date_trunc('minute', now() AT TIME ZONE 'UTC') AS minute_start
         )
         SELECT
             mw.minute_start AS minute_start,
@@ -197,7 +223,7 @@ def get_current_minute_stats():
     }
 
 
-def get_random_content() -> str:
+def get_random_content() -> dict[str, object]:
     sqlmodel_module = import_module("sqlmodel")
     sqlalchemy_module = import_module("sqlalchemy")
     db_module = import_module("backend.db")
@@ -242,7 +268,31 @@ def get_random_content() -> str:
 
     if content is None:
         raise LookupError("no content found")
-    return content
+
+    with Session(engine) as session:
+        aggregate_row = (
+            session.connection()
+            .execute(
+                sqlalchemy_module.text(
+                    """
+                    SELECT hit_count, COALESCE(last_seen_at, first_seen_at) AS last_seen_at
+                    FROM public.danmaku_unique_stats
+                    WHERE room_id = :room_id AND content = :content
+                    """
+                ),
+                {"room_id": db_module.ROOM_ID, "content": content},
+            )
+            .first()
+        )
+
+    if aggregate_row is None:
+        raise LookupError("aggregate stats not found for random content")
+
+    return {
+        "content": content,
+        "count": int(aggregate_row[0]),
+        "last_seen_at": aggregate_row[1],
+    }
 
 
 def health_check():
@@ -300,9 +350,11 @@ async def _run_unique_sync_loop():
 
 
 if FastAPI:
-    StatsSummary = import_module("backend.schemas").StatsSummary
-    SearchResponse = import_module("backend.schemas").SearchResponse
-    RandomResponse = import_module("backend.schemas").RandomResponse
+    schemas_mod = import_module("backend.schemas")
+    StatsSummary = schemas_mod.StatsSummary
+    SearchResponse = schemas_mod.SearchResponse
+    RandomResponse = schemas_mod.RandomResponse
+    LatestDanmuResponse = schemas_mod.LatestDanmuResponse
 
     @asynccontextmanager
     async def _lifespan(_app_instance):
@@ -336,6 +388,30 @@ if FastAPI:
     def api_stats_summary():
         try:
             return get_stats_summary_cached()
+        except Exception as exc:
+            raise HTTPException(500, str(exc)) from exc
+
+    @app.get("/api/stats/latest-danmu", response_model=LatestDanmuResponse)
+    def api_stats_latest_danmu():
+        """Non-cached endpoint returning the latest danmu (content + timestamp).
+
+        Uses deterministic ordering (timestamp DESC, id DESC) and reuses the
+        same base_filters() to ensure parity with the cached summary values.
+        """
+        try:
+            db_module = import_module("backend.db")
+            sqlmodel_module = import_module("sqlmodel")
+            db_get_engine = db_module.get_engine
+            Session = sqlmodel_module.Session
+
+            engine = db_get_engine()
+            if engine is None:
+                raise RuntimeError("DYKIT_DSN is not set")
+
+            with Session(engine) as session:
+                content, ts = _get_latest_danmu(session, db_module.Danmaku, db_module.base_filters)
+
+            return LatestDanmuResponse(content=content, timestamp=ts)
         except Exception as exc:
             raise HTTPException(500, str(exc)) from exc
 
@@ -461,7 +537,7 @@ if FastAPI:
     @app.get("/api/random", response_model=RandomResponse)
     def api_random():
         try:
-            return RandomResponse(content=get_random_content())
+            return RandomResponse(**get_random_content())
         except LookupError as exc:
             raise HTTPException(404, str(exc)) from exc
         except Exception as exc:

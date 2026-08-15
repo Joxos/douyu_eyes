@@ -15,6 +15,16 @@
           <h2>当前分钟弹幕数</h2>
           <p>{{ currentMinuteCount }}</p>
         </div>
+        <div class="card" data-testid="latest-danmu">
+          <h2>最新弹幕</h2>
+          <template v-if="latestDanmuTs && latestDanmuContent">
+            <p class="latest-time">{{ formatTimestamp(latestDanmuTs) }}</p>
+            <div class="latest-content" :title="latestDanmuContent">{{ latestDanmuContent }}</div>
+          </template>
+          <template v-else>
+            <p class="unavailable-state">暂无数据</p>
+          </template>
+        </div>
       </div>
 
       <div class="table-container">
@@ -43,10 +53,18 @@ import { ref, onMounted, onUnmounted } from 'vue'
 
 const uniqueCount = ref(0)
 const currentMinuteCount = ref(0)
+const latestDanmuTs = ref(null)
+const latestDanmuContent = ref(null)
 const top20 = ref([])
 const isLoading = ref(true)
 const error = ref(null)
 let pollingInterval = null
+
+const formatTimestamp = (ts) => {
+  const date = new Date(ts)
+  if (Number.isNaN(date.getTime())) return '时间格式无效'
+  return date.toLocaleString() + ' (本地)'
+}
 
 // NOTE: backend↔frontend contract is strict. Assume data.top20 is
 // an array of { content, count } and assign directly.
@@ -58,6 +76,8 @@ const fetchSummary = async () => {
     const data = await res.json()
     uniqueCount.value = data.unique_count_all_time
     currentMinuteCount.value = data.current_minute_count
+    latestDanmuTs.value = data.latest_danmu_ts
+    latestDanmuContent.value = data.latest_danmu_content
     // Strict contract: consume backend schema as-is
     top20.value = data.top20
   } catch (err) {
@@ -74,13 +94,30 @@ const fetchCurrentMinute = async () => {
     const data = await res.json()
     currentMinuteCount.value = data.count
   } catch (err) {
-    console.error('轮询错误:', err)
+    console.error('当前分钟轮询错误:', err)
   }
+}
+
+const fetchLatestDanmu = async () => {
+  try {
+    const res = await fetch('/api/stats/latest-danmu')
+    if (!res.ok) throw new Error('获取最新弹幕失败')
+    const data = await res.json()
+    latestDanmuTs.value = data.timestamp
+    latestDanmuContent.value = data.content
+  } catch (err) {
+    console.error('最新弹幕轮询错误:', err)
+  }
+}
+
+const pollAll = () => {
+  fetchCurrentMinute()
+  fetchLatestDanmu()
 }
 
 onMounted(() => {
   fetchSummary()
-  pollingInterval = setInterval(fetchCurrentMinute, 5000)
+  pollingInterval = setInterval(pollAll, 5000)
 })
 
 onUnmounted(() => {
@@ -100,18 +137,18 @@ onUnmounted(() => {
   margin-bottom: 30px;
 }
 .card {
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-divider);
   padding: 20px;
   border-radius: 8px;
-  background: #fff;
+  background: var(--color-surface);
   flex: 1;
   text-align: center;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  box-shadow: var(--shadow-card);
 }
 .card h2 {
   margin-top: 0;
   font-size: 1.1em;
-  color: #666;
+  color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -119,14 +156,30 @@ onUnmounted(() => {
   font-size: 2.5em;
   font-weight: bold;
   margin: 10px 0 0;
-  color: #333;
+  color: var(--color-heading);
+}
+.card p.latest-time {
+  font-size: 1.25em;
+}
+.card p.unavailable-state {
+  font-size: 1.25em;
+  color: var(--color-muted);
+  font-weight: normal;
+}
+.card .latest-content {
+  font-size: 0.9em;
+  color: var(--color-muted);
+  margin-top: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .table-container {
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 8px;
   padding: 20px;
-  border: 1px solid #ddd;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  border: 1px solid var(--color-divider);
+  box-shadow: var(--shadow-card);
 }
 .table-container h2 {
   margin-top: 0;
@@ -140,26 +193,27 @@ table {
 th, td {
   padding: 12px;
   text-align: left;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--color-divider);
 }
 th {
-  background-color: #f8f9fa;
+  background-color: var(--color-surface-soft);
   font-weight: 600;
-  color: #444;
+  color: var(--color-heading);
 }
 tr:last-child td {
   border-bottom: none;
 }
 .error {
-  color: #d32f2f;
-  background: #ffebee;
+  color: var(--color-error);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
   padding: 10px;
   border-radius: 4px;
   margin-bottom: 20px;
 }
 .loading {
   text-align: center;
-  color: #666;
+  color: var(--color-muted);
   font-style: italic;
   padding: 40px;
 }

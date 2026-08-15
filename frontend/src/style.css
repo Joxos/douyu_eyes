@@ -3,9 +3,34 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light;
-  color: #111827;
-  background-color: #f5f7fb;
+  color-scheme: light dark;
+  --color-text: #111827;
+  --color-heading: #1f2937;
+  --color-heading-strong: #0f172a;
+  --color-muted: #475569;
+  --color-bg: #f5f7fb;
+  --color-bg-alt: #eef2ff;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f9f9f9;
+  --color-surface-hover: #f1f5f9;
+  --color-border: #dbe2f0;
+  --color-border-muted: #cbd5e1;
+  --color-divider: #e5e7eb;
+  --color-primary: #007bff;
+  --color-primary-disabled: #9ca3af;
+  --color-accent: #ff5f00;
+  --color-accent-strong: #e04e00;
+  --color-link: #646cff;
+  --color-link-hover: #535bf2;
+  --color-active-bg: #dbeafe;
+  --color-error: #b91c1c;
+  --color-error-bg: #ffeaea;
+  --color-error-border: #fecaca;
+  --color-toast: #1f2937;
+  --color-toast-success: #0f766e;
+  --shadow-soft: 0 6px 18px rgba(15, 23, 42, 0.06);
+  --shadow-card: 0 4px 6px rgba(0, 0, 0, 0.08);
+  --shadow-toast: 0 8px 20px rgba(15, 23, 42, 0.25);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -13,13 +38,105 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-text: #e5edf8;
+    --color-heading: #e5edf8;
+    --color-heading-strong: #f8fafc;
+    --color-muted: #94a3b8;
+    --color-bg: #0b1220;
+    --color-bg-alt: #111827;
+    --color-surface: #0f172a;
+    --color-surface-soft: #111c2f;
+    --color-surface-hover: #1e293b;
+    --color-border: #243142;
+    --color-border-muted: #334155;
+    --color-divider: #243142;
+    --color-primary: #3b82f6;
+    --color-primary-disabled: #475569;
+    --color-accent: #ff8a3c;
+    --color-accent-strong: #ff6f00;
+    --color-link: #93c5fd;
+    --color-link-hover: #bfdbfe;
+    --color-active-bg: #1d4ed8;
+    --color-error: #fca5a5;
+    --color-error-bg: rgba(239, 68, 68, 0.18);
+    --color-error-border: rgba(248, 113, 113, 0.5);
+    --color-toast: #111827;
+    --color-toast-success: #10b981;
+    --shadow-soft: 0 6px 18px rgba(0, 0, 0, 0.5);
+    --shadow-card: 0 4px 10px rgba(0, 0, 0, 0.35);
+    --shadow-toast: 0 8px 20px rgba(0, 0, 0, 0.55);
+  }
+}
+
+:root[data-theme='light'] {
+  --color-text: #111827;
+  --color-heading: #1f2937;
+  --color-heading-strong: #0f172a;
+  --color-muted: #475569;
+  --color-bg: #f5f7fb;
+  --color-bg-alt: #eef2ff;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f9f9f9;
+  --color-surface-hover: #f1f5f9;
+  --color-border: #dbe2f0;
+  --color-border-muted: #cbd5e1;
+  --color-divider: #e5e7eb;
+  --color-primary: #007bff;
+  --color-primary-disabled: #9ca3af;
+  --color-accent: #ff5f00;
+  --color-accent-strong: #e04e00;
+  --color-link: #646cff;
+  --color-link-hover: #535bf2;
+  --color-active-bg: #dbeafe;
+  --color-error: #b91c1c;
+  --color-error-bg: #ffeaea;
+  --color-error-border: #fecaca;
+  --color-toast: #1f2937;
+  --color-toast-success: #0f766e;
+  --shadow-soft: 0 6px 18px rgba(15, 23, 42, 0.06);
+  --shadow-card: 0 4px 6px rgba(0, 0, 0, 0.08);
+  --shadow-toast: 0 8px 20px rgba(15, 23, 42, 0.25);
+}
+
+:root[data-theme='dark'] {
+  --color-text: #e5edf8;
+  --color-heading: #e5edf8;
+  --color-heading-strong: #f8fafc;
+  --color-muted: #94a3b8;
+  --color-bg: #0b1220;
+  --color-bg-alt: #111827;
+  --color-surface: #0f172a;
+  --color-surface-soft: #111c2f;
+  --color-surface-hover: #1e293b;
+  --color-border: #243142;
+  --color-border-muted: #334155;
+  --color-divider: #243142;
+  --color-primary: #3b82f6;
+  --color-primary-disabled: #475569;
+  --color-accent: #ff8a3c;
+  --color-accent-strong: #ff6f00;
+  --color-link: #93c5fd;
+  --color-link-hover: #bfdbfe;
+  --color-active-bg: #1d4ed8;
+  --color-error: #fca5a5;
+  --color-error-bg: rgba(239, 68, 68, 0.18);
+  --color-error-border: rgba(248, 113, 113, 0.5);
+  --color-toast: #111827;
+  --color-toast-success: #10b981;
+  --shadow-soft: 0 6px 18px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 4px 10px rgba(0, 0, 0, 0.35);
+  --shadow-toast: 0 8px 20px rgba(0, 0, 0, 0.55);
+}
+
 a {
   font-weight: 500;
-  color: #646cff;
+  color: var(--color-link);
   text-decoration: inherit;
 }
 a:hover {
-  color: #535bf2;
+  color: var(--color-link-hover);
 }
 
 body {
@@ -27,8 +144,8 @@ body {
   display: block;
   min-width: 320px;
   min-height: 100vh;
-  background: linear-gradient(180deg, #f5f7fb 0%, #eef2ff 100%);
-  color: #111827;
+  background: linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-alt) 100%);
+  color: var(--color-text);
 }
 
 #app {
